@@ -1,23 +1,15 @@
 import { Request, Response } from "express";
-export const login = (req: Request, res: Response) => {
-  // Login logic here
-  console.log("Login attempt");
-  res.send("Login successful");
-};
 
-export const register = (req: Request, res: Response) => {
-  // Registration logic here
-  res.send("Registration successful");
-};
+export const register = async (req: Request, res: Response) => {};
+export const login = async (req: Request, res: Response) => {};
+export const logout = async (req: Request, res: Response) => {};
+export const me = async (req: Request, res: Response) => {};
 
-export const getAllUsers = (req: Request, res: Response) => {
-  // Logic to get all users here
-  res.send("List of all users");
-};
+export const sendOtp = async (req: Request, res: Response) => {};
+export const verifyOtp = async (req: Request, res: Response) => {};
 
-export const getUserById = (req: Request, res: Response) => {
-  const userId = req.params.id;
-    res.send(`User details for ID: ${userId}`);
-  // Logic to get user by ID here
-};
+export const forgotPassword = async (req: Request, res: Response) => {};
+export const resetPassword = async (req: Request, res: Response) => {};
 
+export const googleAuth = async (req: Request, res: Response) => {};
+export const googleCallback = async (req: Request, res: Response) => {};
