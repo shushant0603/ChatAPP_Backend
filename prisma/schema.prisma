@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  email       String   @unique
+  password    String
+
+  isVerified  Boolean  @default(false)
+  otp         String?
+  otpExpiry   DateTime?
+
+  // 👇 FRIEND SYSTEM
+  friends     String[] @db.ObjectId
+
+  createdAt   DateTime @default(now())
+}
+
+model FriendRequest {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+
+  senderId  String   @db.ObjectId
+  receiverId String  @db.ObjectId
+
+  status    FriendRequestStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model Chat {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+
+  participants String[]  @db.ObjectId   // exactly 2 users (1–1 chat)
+
+  lastMessageId String?  @db.ObjectId
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+
+model Message {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+
+  chatId    String   @db.ObjectId
+  senderId  String   @db.ObjectId
+
+  content   String
+
+  status    MessageStatus @default(SENT)
+
+  createdAt DateTime @default(now())
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  SEEN
+}
