@@ -8,7 +8,8 @@ const userSocketMap = new Map<string, string>();
 export const initSocket = (httpServer: any) => {
   const io = new Server(httpServer, {
     cors: {
-      origin: "http://localhost:5173", // frontend
+     origin: "http://localhost:5173", // frontend
+      // origin: "http://192.168.1.12:5173",
       credentials: true,
     },
   });
@@ -93,155 +94,134 @@ console.log("🧩 userSocketMap:", userSocketMap);
     });
 
 
+  // ===============================
+    // 📹 START VIDEO CALL
+    // ===============================
+    socket.on("start-video-call", async ({ chatId }) => {
+      if (!chatId) return;
+
+      const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+      });
+      if (!chat || !chat.participants.includes(userId)) return;
+
+      const receiverId = chat.participants.find((id) => id !== userId);
+      if (!receiverId) return;
+
+      const receiverSocketId = userSocketMap.get(receiverId);
+      if (!receiverSocketId) return;
+
+      io.to(receiverSocketId).emit("incoming-video-call", {
+        chatId,
+        from: userId,
+      });
+    });
 
     // ===============================
-// 📹 VIDEO CALL: START
-// ===============================
-socket.on("start-video-call", async ({ chatId }: { chatId: string }) => {
-   if (!chatId || chatId === "null") {
-    console.log("❌ Invalid chatId:", chatId);
-    return;
-  }
+    // ✅ ACCEPT CALL
+    // ===============================
+    socket.on("accept-video-call", ({ chatId, callerId }) => {
+      if (!chatId || !callerId) return;
 
-  const chat = await prisma.chat.findUnique({
-    where: { id: chatId },
-  });
+      const callerSocketId = userSocketMap.get(callerId);
+      if (!callerSocketId) return;
 
-  if (!chat || !chat.participants.includes(userId)) return;
-
-  // 👤 receiver = jo caller nahi hai
-  const receiverId = chat.participants.find((id) => id !== userId);
-  if (!receiverId) return;
-
-  const receiverSocketId = userSocketMap.get(receiverId);
-
-  if (!receiverSocketId) {
-    console.log("❌ Receiver offline");
-    return;
-  }
-
-  console.log(`📞 Call from ${userId} to ${receiverId}`);
-
-  io.to(receiverSocketId).emit("incoming-video-call", {
-    chatId,
-    from: userId,
-  });
-});
-
-// ===============================
-// ✅ VIDEO CALL: ACCEPT
-// ===============================
-socket.on("accept-video-call",async ({ chatId }: { chatId: string }) => {
-  const chat = await prisma.chat.findUnique({ where: { id: chatId } });
-  if (!chat) return;
-
-  const callerId = chat.participants.find((id) => id !== userId);
-  if (!callerId) return;
-
-  const callerSocketId = userSocketMap.get(callerId);
-  if (!callerSocketId) return;
-
-  io.to(callerSocketId).emit("call-accepted", { chatId });
-});
-
-// ===============================
-// ❌ VIDEO CALL: REJECT
-// ===============================
-socket.on("reject-video-call", async ({ chatId }: { chatId: string }) => {
-  const chat = await prisma.chat.findUnique({ where: { id: chatId } });
-  if (!chat) return;
-
-  const callerId = chat.participants.find((id) => id !== userId);
-  if (!callerId) return;
-
-  const callerSocketId = userSocketMap.get(callerId);
-  if (!callerSocketId) return;
-
-  io.to(callerSocketId).emit("call-rejected", { chatId });
-});
-
-// ===============================
-// ☎️ VIDEO CALL: END
-// ===============================
-socket.on("end-video-call", async ({ chatId }: { chatId: string }) => {
-  const chat = await prisma.chat.findUnique({ where: { id: chatId } });
-  if (!chat) return;
-
-  chat.participants.forEach((participantId) => {
-    if (participantId === userId) return;
-
-    const socketId = userSocketMap.get(participantId);
-    if (socketId) {
-      io.to(socketId).emit("call-ended", { chatId });
-    }
-  });
-});
-socket.on(
-  "webrtc-offer",
-  async ({ chatId, offer }: { chatId: string; offer: any }) => {
-    if (!chatId || !offer) return;
-
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
+      io.to(callerSocketId).emit("call-accepted", { chatId });
     });
-    if (!chat) return;
 
-    const receiverId = chat.participants.find((id) => id !== userId);
-    if (!receiverId) return;
+    // ===============================
+    // ❌ REJECT CALL
+    // ===============================
+    socket.on("reject-video-call", ({ chatId, callerId }) => {
+      if (!chatId || !callerId) return;
 
-    const receiverSocketId = userSocketMap.get(receiverId);
-    if (!receiverSocketId) {
-      console.log("❌ Receiver offline (offer)");
-      return;
-    }
+      const callerSocketId = userSocketMap.get(callerId);
+      if (!callerSocketId) return;
 
-    io.to(receiverSocketId).emit("webrtc-offer", { offer });
-  }
-);
-socket.on(
-  "webrtc-answer",
-  async ({ chatId, answer }: { chatId: string; answer: any }) => {
-    if (!chatId || !answer) return;
-
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
+      io.to(callerSocketId).emit("call-rejected", { chatId });
     });
-    if (!chat) return;
 
-    const callerId = chat.participants.find((id) => id !== userId);
-    if (!callerId) return;
+    // ===============================
+    // ☎️ END CALL
+    // ===============================
+    socket.on("end-video-call", async ({ chatId }) => {
+      if (!chatId) return;
 
-    const callerSocketId = userSocketMap.get(callerId);
-    if (!callerSocketId) {
-      console.log("❌ Caller offline (answer)");
-      return;
-    }
+      const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+      });
+      if (!chat) return;
 
-    io.to(callerSocketId).emit("webrtc-answer", { answer });
-  }
-);
-
-socket.on(
-  "ice-candidate",
-  async ({ chatId, candidate }: { chatId: string; candidate: any }) => {
-    if (!chatId || !candidate) return;
-
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
+      chat.participants.forEach((id) => {
+        if (id === userId) return;
+        const socketId = userSocketMap.get(id);
+        if (socketId) {
+          io.to(socketId).emit("call-ended", { chatId });
+        }
+      });
     });
-    if (!chat) return;
 
-    chat.participants.forEach((participantId) => {
-      if (participantId === userId) return;
+    // ===============================
+    // 🌐 WEBRTC SIGNALING
+    // ===============================
+    socket.on("webrtc-offer", async ({ chatId, offer }) => {
+      if (!chatId || !offer) return;
 
-      const socketId = userSocketMap.get(participantId);
-      if (socketId) {
-        io.to(socketId).emit("ice-candidate", { candidate });
+      const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+      });
+      if (!chat) return;
+
+      const receiverId = chat.participants.find((id) => id !== userId);
+      if (!receiverId) return;
+
+      const receiverSocketId = userSocketMap.get(receiverId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("webrtc-offer", { offer });
       }
     });
-  }
-);
 
+    socket.on("webrtc-answer", async ({ chatId, answer }) => {
+      if (!chatId || !answer) return;
+
+      const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+      });
+      if (!chat) return;
+
+      const callerId = chat.participants.find((id) => id !== userId);
+      if (!callerId) return;
+
+      const callerSocketId = userSocketMap.get(callerId);
+      if (callerSocketId) {
+        io.to(callerSocketId).emit("webrtc-answer", { answer });
+      }
+    });
+
+    socket.on("ice-candidate", async ({ chatId, candidate }) => {
+      if (!chatId || !candidate) return;
+
+      const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+      });
+      if (!chat) return;
+
+      chat.participants.forEach((id) => {
+        if (id === userId) return;
+        const socketId = userSocketMap.get(id);
+        if (socketId) {
+          io.to(socketId).emit("ice-candidate", { candidate });
+        }
+      });
+    });
+
+    // ===============================
+    // 🔴 DISCONNECT
+    // ===============================
+    socket.on("disconnect", () => {
+      userSocketMap.delete(userId);
+      console.log("🔴 Socket disconnected:", socket.id);
+    });
   });
 
   return io;
